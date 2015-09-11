@@ -21,6 +21,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 '''
+import cPickle as pickle
 from datetime import datetime, date
 from itertools import chain
 import json
@@ -151,6 +152,13 @@ class DAO(object):
     def on_json(self, json):
         return json
 
+    def serial(self, action):
+        if action == 'DEL':
+            fields = {'id': getattr(self, 'id')}
+        else:
+            fields = {n: getattr(self, n) for n in self.FIELDS}
+        return pickle.dumps(fields, pickle.HIGHEST_PROTOCOL)
+
     def save(self):
         cache = {}
         for n in self.JSON_FIELDS:
@@ -176,10 +184,13 @@ class DAO(object):
             self._executed_stmt = None
             cur.execute(stmt, args)
             self._executed_stmt = cur._executed
-        if new:
-            if 'id' in self.FIELDS:
-                setattr(self, 'id', cur.lastrowid)
-            self.after_insert()
+            if new:
+                if 'id' in self.FIELDS:
+                    setattr(self, 'id', cur.lastrowid)
+                DB.log('INS', self.TABLE, self.serial)
+                self.after_insert()
+            else:
+                DB.log('UPD', self.TABLE, self.serial)
         self.after_save()
         for n in self.JSON_FIELDS:
             setattr(self, n, cache[n])
@@ -203,6 +214,7 @@ class DAO(object):
     def delete(self):
         with DB as cur:
             cur.execute('DELETE from `%s` where `id`=%%s' % self.TABLE, self.id)
+            DB.log('DEL', self.TABLE, self.serial)
 
     def children(self, cls):
         '''

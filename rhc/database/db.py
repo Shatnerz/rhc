@@ -29,6 +29,7 @@ class _DB(object):
 
     def __init__(self):
         self.__kwargs = None
+        self.__transaction_id = 0
         self.__transaction = 0
         self.__local = threading.local()
 
@@ -47,6 +48,7 @@ class _DB(object):
         kwargs['init_command'] = 'SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED'
         if kwargs.pop('dirty', False):
             kwargs['init_command'] = 'SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED'
+        self.__log = kwargs.pop('log', None)
         self.__commit = kwargs.pop('commit', True)
         self.__close = kwargs.pop('close', False)
         self.__kwargs = kwargs
@@ -63,10 +65,16 @@ class _DB(object):
             self.__local.connection = connection
         return connection
 
+    def log(self, action, table, serial_fn):
+        if self.__log:
+            self.__log(self.__transaction_id, action, table, serial_fn(action))
+
     def close(self):
         self._connection().close()
 
     def cursor(self):
+        if self.__transaction == 0:
+            raise Exception('attempting to get cursor when no transaction is started')
         return self._connection().cursor()
 
     def _commit(self):
@@ -76,6 +84,8 @@ class _DB(object):
         self._connection().rollback()
 
     def start_transaction(self):
+        if self.__transaction == 0:
+            self.__transaction_id += 1
         self.__transaction += 1
 
     def stop_transaction(self, commit=True):

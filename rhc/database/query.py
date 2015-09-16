@@ -111,17 +111,17 @@ class Query(object):
         return result
 
     def _execute(self, stmt, arg):
-        cur = DB.cursor()
-        cur.execute(stmt, arg)
-        self._executed_stmt = cur._executed
-        for rs in cur:
-            s = {}
-            row = zip(self._column_names, rs)
-            for c in self._classes:
-                l = len(c.FIELDS) + len(c.CALCULATED_FIELDS)
-                val, row = row[:l], row[l:]
-                o = c(**dict(val))
-                s[c.TABLE] = o
-                o._tables = s
-                yield o
-        return
+        with DB as cur:
+            cur.execute(stmt, arg)
+            self._executed_stmt = cur._executed
+            for rs in cur:
+                s = {}
+                row = zip(self._column_names, rs)
+                for c in self._classes:
+                    l = len(c.FIELDS) + len(c.CALCULATED_FIELDS)
+                    val, row = row[:l], row[l:]
+                    o = c(**dict(val))
+                    s[c.TABLE] = o
+                    o._tables = s
+                    yield o
+            return

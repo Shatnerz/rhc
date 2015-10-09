@@ -67,7 +67,7 @@ class _DB(object):
 
     def log(self, action, table, serial_fn):
         if self.__log:
-            self.__log(self.__transaction_id, action, table, serial_fn(action))
+            self.__log(self.__transaction_id, action, table, serial_fn(action) if serial_fn is not None else None)
 
     def close(self):
         self._connection().close()
@@ -78,14 +78,17 @@ class _DB(object):
         return self._connection().cursor()
 
     def _commit(self):
+        self.log('COMMIT', None, None)
         self._connection().commit()
 
     def _rollback(self):
+        self.log('ROLLBACK', None, None)
         self._connection().rollback()
 
     def start_transaction(self):
         if self.__transaction == 0:
             self.__transaction_id += 1
+            self.log('START', None, None)
         self.__transaction += 1
 
     def stop_transaction(self, commit=True):

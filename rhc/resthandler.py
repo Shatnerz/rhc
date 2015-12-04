@@ -51,6 +51,12 @@ class RESTRequest(object):
         self.timestamp = datetime.datetime.now()
         self.is_delayed = False
 
+    def _add_content(self, handler):
+        self.http_content = handler.http_content
+        self.http_multipart = handler.http_multipart
+        self.timestamp = datetime.datetime.now()
+        self.is_delayed = False
+
     def delay(self):
         self.is_delayed = True
 
@@ -145,7 +151,11 @@ class RESTHandler(HTTPHandler):
         handler, groups = self.context._match(self.http_resource, self.http_method)
         if handler:
             try:
-                request = RESTRequest(self)
+                if hasattr(self, '_request'):
+                    request = self._request
+                    request._add_content(self)
+                else:
+                    request = RESTRequest(self)
                 self.on_rest_data(request, *groups)
                 result = handler(request, *groups)
                 if isinstance(result, RESTDelay):
@@ -165,6 +175,19 @@ class RESTHandler(HTTPHandler):
         else:
             self.on_rest_no_match()
             self._rest_send(code=404, message='Not Found')
+
+    def on_http_headers(self):
+        if self.http_method:
+            handler, groups = self.context._match(self.http_resource, self.http_method, is_header=True)
+            if handler:
+                try:
+                    request = self._request = RESTRequest(self)
+                    return handler(request, *groups)
+                except Exception as e:
+                    self.on_rest_exception(*sys.exc_info())
+                    return 1, e.message
+
+        return 0, None
 
     def on_rest_data(self, request, *groups):
         ''' called on rest_handler match '''
@@ -268,12 +291,18 @@ class RESTMapper(object):
             groups are included in the regex, they will be passed as
             parameters to the matching method.
 
+            A crud method is a string, or tuple of strings that define
+            the full path to a function. If a tuple is defined, then
+            the first string is a path to a header handler (which
+            returns the same values as on_http_headers) and the second
+            string is a path to a handler for the full http document.
+
             The _match method will evaluate each mapping in the order
             that they are added. The first match wins.
 
             For example:
 
-                add('/foo/(\d+)/bar', get=my_func)
+                add('/foo/(\d+)/bar', get='my_func')
 
                 will match:
 
@@ -288,7 +317,7 @@ class RESTMapper(object):
         '''
         self.__mapping.append(RESTMapping(pattern, get, post, put, delete))
 
-    def _match(self, resource, method):
+    def _match(self, resource, method, is_header=False):
         '''
             Match a resource + method to a RESTMapping
 
@@ -305,7 +334,10 @@ class RESTMapper(object):
         for mapping in self.__mapping:
             m = mapping.pattern.match(resource)
             if m:
-                handler = mapping.method.get(method.lower())
+                if is_header:
+                    handler = mapping.header.get(method.lower())
+                else:
+                    handler = mapping.content.get(method.lower())
                 if handler:
                     return handler, m.groups()
         return None, None
@@ -327,7 +359,17 @@ class RESTMapping(object):
 
     def __init__(self, pattern, get, post, put, delete):
         self.pattern = re.compile(pattern)
-        self.method = {
+        get_hdr, get = get if isinstance(get, tuple) else (None, get)
+        post_hdr, post = post if isinstance(post, tuple) else (None, post)
+        put_hdr, put = put if isinstance(put, tuple) else (None, put)
+        delete_hdr, delete = delete if isinstance(delete, tuple) else (None, delete)
+        self.header = {
+            'get': import_by_pathname(get_hdr),
+            'post': import_by_pathname(post_hdr),
+            'put': import_by_pathname(put_hdr),
+            'delete': import_by_pathname(delete_hdr),
+        }
+        self.content = {
             'get': import_by_pathname(get),
             'post': import_by_pathname(post),
             'put': import_by_pathname(put),

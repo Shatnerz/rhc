@@ -255,10 +255,34 @@ class HTTPHandler(BasicHandler):
 
         return True
 
+    def _handle_content_length(self):
+
+        if 'Content-Length' in self.http_headers:
+            try:
+                self.__length = int(self.http_headers['Content-Length'])
+            except ValueError:
+                return self.__error('Invalid content length')
+            if self.http_max_content_length:
+                if self.__length > self.http_max_content_length:
+                    self.send_server(code=413, message='Request Entity Too Large')
+                    return self.__error('Content-Length exceeds maximum length')
+            self.__state = self.__content
+
+        else:
+            if self.http_method:   # this means we are a server (sneaky code)
+                self.__length = 0  # identity not allowed on client request
+                self.__state = self.__content
+
+            else:
+                self._on_close = self.__on_identity_close
+                self.__state = self.__identity
+
+        return True
+
     def _end_header(self):
 
-        if getattr(self, '_http_method', None) == 'HEAD':  # this gets set if the send method is called
-            self.__length = 0
+        if getattr(self, '_http_method', None) == 'HEAD':  # this means we are a client (sneaky code)
+            self.__length = 0                              # no content expected on HEAD
             self.__state = self.__content
 
         elif 'Transfer-Encoding' in self.http_headers:
@@ -267,23 +291,8 @@ class HTTPHandler(BasicHandler):
             self.__state = self.__chunked_length
 
         else:
-            if 'Content-Length' in self.http_headers:
-                try:
-                    self.__length = int(self.http_headers['Content-Length'])
-                except ValueError:
-                    return self.__error('Invalid content length')
-                if self.http_max_content_length:
-                    if self.__length > self.http_max_content_length:
-                        self.send_server(code=413, message='Request Entity Too Large')
-                        return self.__error('Content-Length exceeds maximum length')
-                self.__state = self.__content
-            else:
-                if self.http_method:  # this means we are a server (sneaky code)
-                    self.__length = 0
-                    self.__content()
-                else:
-                    self._on_close = self.__on_identity_close
-                    self.__state = self.__identity
+            if not self._handle_content_length():
+                return False
 
         rc, result = self.on_http_headers()
         if rc != 0:

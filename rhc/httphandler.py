@@ -154,6 +154,12 @@ class HTTPHandler(BasicHandler):
 
         self.__send(headers, content)
 
+    @property
+    def is_server(self):
+        if self.http_method:  # this is set after parsing the status line, prior to this, the propery is meaningless
+            return True
+        return False
+
     def __setup(self):
         self.http_message = ''
         self.http_headers = {}
@@ -269,7 +275,7 @@ class HTTPHandler(BasicHandler):
             self.__state = self.__content
 
         else:
-            if self.http_method:   # this means we are a server (sneaky code)
+            if self.is_server:
                 self.__length = 0  # identity not allowed on client request
                 self.__state = self.__content
 
@@ -281,7 +287,7 @@ class HTTPHandler(BasicHandler):
 
     def _end_header(self):
 
-        if getattr(self, '_http_method', None) == 'HEAD':  # this means we are a client (sneaky code)
+        if getattr(self, '_http_method', None) == 'HEAD':  # presense of _http_method means we've run the send method (we're a client)
             self.__length = 0                              # no content expected on HEAD
             self.__state = self.__content
 

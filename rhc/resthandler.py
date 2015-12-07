@@ -177,7 +177,7 @@ class RESTHandler(HTTPHandler):
             self._rest_send(code=404, message='Not Found')
 
     def on_http_headers(self):
-        if self.http_method:
+        if self.is_server:
             handler, groups = self.context._match(self.http_resource, self.http_method, is_header=True)
             if handler:
                 try:

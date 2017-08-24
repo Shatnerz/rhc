@@ -22,7 +22,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 '''
 import pymysql
+import logging
 import threading
+
+
+log = logging.getLogger(__name__)
 
 
 class _DB(object):
@@ -86,6 +90,10 @@ class _DB(object):
         self.__transaction += 1
 
     def stop_transaction(self, commit=True):
+        log.debug(
+            'starting `stop_transaction`, self.__transaction=%s',
+            self.__transaction,
+        )
         if self.__transaction == 0:
             raise Exception('attempting to stop transaction when none is started')
         self.__transaction -= 1
@@ -96,6 +104,10 @@ class _DB(object):
                 self._rollback()
             if self.__close:
                 self.close()
+        log.debug(
+            'finishing `stop_transaction`, self.__transaction=%s',
+            self.__transaction,
+        )
 
     def database_map(self, tablename):
         return self.__database_map.get(tablename, tablename)

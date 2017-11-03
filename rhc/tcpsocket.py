@@ -519,6 +519,8 @@ class BasicHandler (object):
                     self._network._set_pending(self._do_read)  # give buffered ssl data another chance
 
     def _do_write(self, data=None):
+        if isinstance(data, unicode):  # Try to encode uicode to utf-8
+            data = data.encode('utf-8')
         if data is None:
             data = self._sending
             self._sending = ''

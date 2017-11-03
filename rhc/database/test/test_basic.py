@@ -1,6 +1,5 @@
 from __future__ import absolute_import
 import pytest
-import weakref
 
 from rhc.database.dao import DAO
 
@@ -104,22 +103,3 @@ def test_join(data):
     assert len(names) == 2
     assert 'fred' in names
     assert 'sally' in names
-
-
-def test_dao_cleanup_from_save(db):
-    obj = Parent(foo=1, bar=2).save()
-    ref = weakref.ref(obj)
-    assert obj is ref()
-    obj = 0  # dereference
-    assert ref() is None
-
-
-def test_dao_cleanup_from_load(db):
-    # save object and remember id
-    obj_id = Parent(foo=1, bar=2).save().id
-    assert obj_id
-    obj = Parent.load(obj_id)
-    ref = weakref.ref(obj)
-    assert ref() is obj
-    obj = 0
-    assert ref() is None
